@@ -1,4 +1,5 @@
 const { Client, GatewayIntentBits, SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, SelectMenuBuilder, StringSelectMenuBuilder } = require('discord.js');
+const { InteractionResponseFlags } = require('discord.js');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
@@ -293,7 +294,7 @@ class OverwatchScheduleBot {
             } catch (error) {
                 console.error('Error handling interaction:', error);
                 if (!interaction.replied) {
-                    await interaction.reply({ content: 'An error occurred!', ephemeral: true });
+                    await interaction.reply({ content: 'An error occurred!', flags: InteractionResponseFlags.Ephemeral });
                 }
             }
         });
@@ -362,7 +363,7 @@ class OverwatchScheduleBot {
             function(err) {
                 if (err) {
                     console.error(err);
-                    return interaction.reply({ content: 'Error setting up profile!', ephemeral: true });
+                    return interaction.reply({ content: 'Error setting up profile!', flags: InteractionResponseFlags.Ephemeral });
                 }
             }
         );
@@ -386,7 +387,7 @@ class OverwatchScheduleBot {
             .setDescription(`Welcome! Profile created for ${interaction.user.username}.\n\n**Timezone:** ${timezone}\n\nNext steps:\n1. Select your preferred roles below\n2. Use \`/add-account\` to add your Overwatch accounts with ranks\n3. Start creating and joining sessions!`)
             .setColor('#FF6B35');
 
-        await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+        await interaction.reply({ embeds: [embed], components: [row], flags: InteractionResponseFlags.Ephemeral });
     }
 
     async handleAddAccount(interaction) {
@@ -408,7 +409,7 @@ class OverwatchScheduleBot {
             async function(err) {
                 if (err) {
                     console.error(err);
-                    return interaction.reply({ content: 'Error adding account!', ephemeral: true });
+                    return interaction.reply({ content: 'Error adding account!', flags: InteractionResponseFlags.Ephemeral });
                 }
 
                 const accountId = this.lastID;
@@ -438,7 +439,7 @@ class OverwatchScheduleBot {
                             .setEmoji('💚')
                     );
 
-                await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+                await interaction.reply({ embeds: [embed], components: [row], flags: InteractionResponseFlags.Ephemeral });
             }
         );
     }
@@ -452,7 +453,7 @@ class OverwatchScheduleBot {
             [interaction.user.id, accountName],
             async (err, account) => {
                 if (err || !account) {
-                    return interaction.reply({ content: 'Account not found!', ephemeral: true });
+                    return interaction.reply({ content: 'Account not found!', flags: InteractionResponseFlags.Ephemeral });
                 }
 
                 const embed = new EmbedBuilder()
@@ -479,7 +480,7 @@ class OverwatchScheduleBot {
                             .setEmoji('💚')
                     );
 
-                await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+                await interaction.reply({ embeds: [embed], components: [row], flags: InteractionResponseFlags.Ephemeral });
             }
         );
     }
@@ -559,7 +560,7 @@ class OverwatchScheduleBot {
     }
 
     async joinQueue(interaction, sessionId) {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: InteractionResponseFlags.Ephemeral });
 
         // Check if user already in queue
         this.db.get(
@@ -629,7 +630,7 @@ class OverwatchScheduleBot {
             await interaction.reply({
                 content: 'Select which roles you can play for this session:',
                 components: [row],
-                ephemeral: true
+                flags: InteractionResponseFlags.Ephemeral
             });
         }
     }
@@ -640,7 +641,7 @@ class OverwatchScheduleBot {
     }
 
     async manageSession(interaction, sessionId) {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: InteractionResponseFlags.Ephemeral });
 
         // Check if user is the session creator
         this.db.get(
@@ -881,6 +882,9 @@ class OverwatchScheduleBot {
             const accountId = parseInt(parts[2]);
             const role = parts[3];
             await this.showRankSelection(interaction, accountId, role);
+            else if (customId === 'edit-profile') {
+    await this.handleEditProfile(interaction);
+};
         }
     }
 
@@ -898,9 +902,31 @@ class OverwatchScheduleBot {
         await interaction.reply({
             content: `Select your **${role}** rank:`,
             components: [row],
-            ephemeral: true
+            flags: InteractionResponseFlags.Ephemeral
         });
     }
+
+async handleEditProfile(interaction) {
+    this.db.all(
+        'SELECT * FROM user_accounts WHERE discord_id = ? ORDER BY account_name',
+        [interaction.user.id],
+        async (err, accounts) => {
+            if (err) accounts = [];
+            
+            let message = '**Your Accounts:**\n';
+            accounts.forEach((account, i) => {
+                message += `${i+1}. ${account.account_name} ${account.is_primary ? '(Primary)' : ''}\n`;
+            });
+            
+            message += '\nUse `/edit-account account-name:YourAccountName` to edit ranks!';
+            
+            await interaction.reply({ 
+                content: message, 
+                flags: InteractionResponseFlags.Ephemeral 
+            });
+        }
+    );
+}
 
     async handleSelectMenu(interaction) {
         const customId = interaction.customId;
@@ -913,12 +939,12 @@ class OverwatchScheduleBot {
                 [JSON.stringify(selectedRoles), interaction.user.id],
                 (err) => {
                     if (err) {
-                        return interaction.reply({ content: 'Error updating preferred roles!', ephemeral: true });
+                        return interaction.reply({ content: 'Error updating preferred roles!', flags: InteractionResponseFlags.Ephemeral });
                     }
 
                     interaction.reply({
                         content: `Preferred roles updated: ${selectedRoles.join(', ')}`,
-                        ephemeral: true
+                        flags: InteractionResponseFlags.Ephemeral
                     });
                 }
             );
@@ -943,7 +969,7 @@ class OverwatchScheduleBot {
             await interaction.reply({
                 content: `Now select your **${selectedRank}** division:`,
                 components: [row],
-                ephemeral: true
+                flags: InteractionResponseFlags.Ephemeral
             });
         } else if (customId.startsWith('select-division-')) {
             const parts = customId.split('-');
@@ -961,12 +987,12 @@ class OverwatchScheduleBot {
                 [rank, division, accountId],
                 (err) => {
                     if (err) {
-                        return interaction.reply({ content: 'Error updating rank!', ephemeral: true });
+                        return interaction.reply({ content: 'Error updating rank!', flags: InteractionResponseFlags.Ephemeral });
                     }
 
                     interaction.reply({
                         content: `✅ ${role} rank set to **${rank} ${division}**!`,
-                        ephemeral: true
+                        flags: InteractionResponseFlags.Ephemeral
                     });
                 }
             );
@@ -986,12 +1012,12 @@ class OverwatchScheduleBot {
                 [sessionId, interaction.user.id, accountId, JSON.stringify(selectedRoles)],
                 async (err) => {
                     if (err) {
-                        return interaction.reply({ content: 'Error joining queue!', ephemeral: true });
+                        return interaction.reply({ content: 'Error joining queue!', flags: InteractionResponseFlags.Ephemeral });
                     }
 
                     await interaction.reply({
                         content: `✅ Successfully joined the queue for session #${sessionId}!\n**Preferred roles:** ${selectedRoles.join(', ')}`,
-                        ephemeral: true
+                        flags: InteractionResponseFlags.Ephemeral
                     });
                 }
             );
@@ -1007,7 +1033,7 @@ class OverwatchScheduleBot {
                 [sessionId, userId, parseInt(accountId), role, interaction.user.id],
                 async (err) => {
                     if (err) {
-                        return interaction.reply({ content: 'Error selecting player!', ephemeral: true });
+                        return interaction.reply({ content: 'Error selecting player!', flags: InteractionResponseFlags.Ephemeral });
                     }
 
                     // Remove from queue
@@ -1018,7 +1044,7 @@ class OverwatchScheduleBot {
 
                     await interaction.reply({
                         content: `✅ Player selected for ${role} role!`,
-                        ephemeral: true
+                        flags: InteractionResponseFlags.Ephemeral
                     });
 
                     // Check if session is full
@@ -1196,11 +1222,11 @@ class OverwatchScheduleBot {
 
     // Stub implementations for remaining handlers
     async handleSetPlaying(interaction) {
-        await interaction.reply({ content: 'Set playing feature coming soon!', ephemeral: true });
+        await interaction.reply({ content: 'Set playing feature coming soon!', flags: InteractionResponseFlags.Ephemeral });
     }
 
     async handleWhosPlaying(interaction) {
-        await interaction.reply({ content: 'Whos playing feature coming soon!', ephemeral: true });
+        await interaction.reply({ content: 'Whos playing feature coming soon!', flags: InteractionResponseFlags.Ephemeral });
     }
 
     async handleViewSessions(interaction) {
@@ -1232,7 +1258,7 @@ class OverwatchScheduleBot {
             [interaction.user.id],
             async (err, user) => {
                 if (err || !user) {
-                    return interaction.reply({ content: 'Profile not found! Use `/setup-profile` to create one.', ephemeral: true });
+                    return interaction.reply({ content: 'Profile not found! Use `/setup-profile` to create one.', flags: InteractionResponseFlags.Ephemeral });
                 }
 
                 // Get all accounts
@@ -1274,7 +1300,7 @@ class OverwatchScheduleBot {
                                     .setEmoji('✏️')
                             );
 
-                        interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+                        interaction.reply({ embeds: [embed], components: [row], flags: InteractionResponseFlags.Ephemeral });
                     }
                 );
             }
@@ -1289,20 +1315,20 @@ class OverwatchScheduleBot {
             [sessionId, interaction.user.id],
             function(err) {
                 if (err) {
-                    return interaction.reply({ content: 'Error cancelling session!', ephemeral: true });
+                    return interaction.reply({ content: 'Error cancelling session!', flags: InteractionResponseFlags.Ephemeral });
                 }
 
                 if (this.changes === 0) {
-                    return interaction.reply({ content: 'Session not found or you are not the creator!', ephemeral: true });
+                    return interaction.reply({ content: 'Session not found or you are not the creator!', flags: InteractionResponseFlags.Ephemeral });
                 }
 
-                interaction.reply({ content: `Session #${sessionId} has been cancelled.`, ephemeral: true });
+                interaction.reply({ content: `Session #${sessionId} has been cancelled.`, flags: InteractionResponseFlags.Ephemeral });
             }
         );
     }
 
     async handleStopPlaying(interaction) {
-        await interaction.reply({ content: 'Stop playing feature coming soon!', ephemeral: true });
+        await interaction.reply({ content: 'Stop playing feature coming soon!', flags: InteractionResponseFlags.Ephemeral });
     }
 
     async handleLeaveQueue(interaction) {
@@ -1313,14 +1339,14 @@ class OverwatchScheduleBot {
             [sessionId, interaction.user.id],
             function(err) {
                 if (err) {
-                    return interaction.reply({ content: 'Error leaving queue!', ephemeral: true });
+                    return interaction.reply({ content: 'Error leaving queue!', flags: InteractionResponseFlags.Ephemeral });
                 }
 
                 if (this.changes === 0) {
-                    return interaction.reply({ content: 'You were not in the queue for this session!', ephemeral: true });
+                    return interaction.reply({ content: 'You were not in the queue for this session!', flags: InteractionResponseFlags.Ephemeral });
                 }
 
-                interaction.reply({ content: `Left the queue for session #${sessionId}.`, ephemeral: true });
+                interaction.reply({ content: `Left the queue for session #${sessionId}.`, flags: InteractionResponseFlags.Ephemeral });
             }
         );
     }
