@@ -1,5 +1,5 @@
 import discord, json
-from core import ranks, timeutil
+from core import models, timeutil
 
 def session_embed(rec: dict, queue_size: int, fills: dict[str,int]):
     """Return a discord.Embed reflecting live state."""
@@ -19,7 +19,7 @@ def session_embed(rec: dict, queue_size: int, fills: dict[str,int]):
     em.add_field(
         name="Slots",
         value="\n".join(f"{role}: {fills[role]}/{need}" 
-                        for role,need in ranks.GAME_MODES[rec['game_mode']].items() 
+                        for role,need in models.GAME_MODES[rec['game_mode']].items() 
                         if need),
         inline=False
     )
