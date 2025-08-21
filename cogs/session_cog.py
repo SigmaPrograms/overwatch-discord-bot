@@ -4,6 +4,7 @@ from discord.ext import commands
 from core.database import db
 from core.embeds import session_embed
 from core.models import GAME_MODES
+from core.ui import SessionView
 
 class SessionCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
