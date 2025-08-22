@@ -37,8 +37,8 @@ class SessionView(discord.ui.View):
         except Exception:
             return None
     
-    async def get_queue_info(self) -> tuple[int, Dict[str, int]]:
-        """Get queue count and role distribution from participants."""
+    async def get_queue_info(self) -> tuple[int, Dict[str, int], List[Dict[str, Any]]]:
+        """Get queue count, role distribution from participants, and participant details."""
         try:
             # Get queue count
             queue_rows = await database.db.fetch(
@@ -47,22 +47,28 @@ class SessionView(discord.ui.View):
             )
             queue_count = queue_rows[0]['count'] if queue_rows else 0
             
-            # Get role distribution from accepted participants
+            # Get role distribution and details from accepted participants
             participants = await database.db.fetch(
-                """SELECT role FROM session_participants 
-                   WHERE session_id = ?""",
+                """SELECT sp.role, sp.is_streaming, u.username, ua.account_name
+                   FROM session_participants sp
+                   JOIN users u ON sp.user_id = u.discord_id
+                   JOIN user_accounts ua ON sp.account_id = ua.id
+                   WHERE sp.session_id = ?
+                   ORDER BY sp.selected_at ASC""",
                 self.session_id
             )
             
             role_counts = {"tank": 0, "dps": 0, "support": 0}
+            participants_list = []
             for participant in participants:
                 role = participant['role']
                 if role in role_counts:
                     role_counts[role] += 1
+                participants_list.append(dict(participant))
             
-            return queue_count, role_counts
+            return queue_count, role_counts, participants_list
         except Exception:
-            return 0, {"tank": 0, "dps": 0, "support": 0}
+            return 0, {"tank": 0, "dps": 0, "support": 0}, []
     
     async def update_embed(self, interaction: Interaction):
         """Update the session embed with current data."""
@@ -72,8 +78,8 @@ class SessionView(discord.ui.View):
                 await interaction.followup.send("Session not found.", ephemeral=True)
                 return
             
-            queue_count, role_counts = await self.get_queue_info()
-            embed = embeds.session_embed(session_data, queue_count, role_counts)
+            queue_count, role_counts, participants = await self.get_queue_info()
+            embed = embeds.session_embed(session_data, queue_count, role_counts, participants)
             
             await interaction.edit_original_response(embed=embed, view=self)
         except Exception as e:
@@ -783,19 +789,27 @@ class PlayerAcceptanceView(discord.ui.View):
             
             # Get current role distribution from participants
             participants = await database.db.fetch(
-                """SELECT role FROM session_participants 
-                   WHERE session_id = ?""",
+                """SELECT sp.role, sp.is_streaming, u.username, ua.account_name
+                   FROM session_participants sp
+                   JOIN users u ON sp.user_id = u.discord_id
+                   JOIN user_accounts ua ON sp.account_id = ua.id
+                   WHERE sp.session_id = ?
+                   ORDER BY sp.selected_at ASC""",
                 self.session_id
             )
             
             role_counts = {"tank": 0, "dps": 0, "support": 0}
+            participants_list = []
             for participant in participants:
                 role = participant['role']
                 if role in role_counts:
                     role_counts[role] += 1
+                
+                # Convert to dict for embed function
+                participants_list.append(dict(participant))
             
             # Create updated embed
-            embed = embeds.session_embed(session_dict, queue_count, role_counts)
+            embed = embeds.session_embed(session_dict, queue_count, role_counts, participants_list)
             
             # Get the message ID and update it
             message_id = session_dict.get('message_id')
@@ -1209,7 +1223,7 @@ class SessionCreationView(discord.ui.View):
             session_dict = dict(session_data)
             
             # Create session embed and view
-            embed = embeds.session_embed(session_dict, 0, {"tank": 0, "dps": 0, "support": 0})
+            embed = embeds.session_embed(session_dict, 0, {"tank": 0, "dps": 0, "support": 0}, [])
             view = SessionView(self.bot, session_id)
             
             # Send session message

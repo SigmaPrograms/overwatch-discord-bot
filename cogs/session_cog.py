@@ -177,7 +177,7 @@ class SessionCog(commands.Cog):
             session_dict = dict(session_data)
             
             # Create session embed and view
-            embed = embeds.session_embed(session_dict, 0, {"tank": 0, "dps": 0, "support": 0})
+            embed = embeds.session_embed(session_dict, 0, {"tank": 0, "dps": 0, "support": 0}, [])
             view = ui.SessionView(self.bot, session_id)
             
             # Send session message
