@@ -386,8 +386,8 @@ class QueueManagementView(discord.ui.View):
                     # Show ranks
                     ranks = []
                     for role in ['tank', 'dps', 'support']:
-                        rank = account.get(f'{role}_rank')
-                        division = account.get(f'{role}_division')
+                        rank = account[f'{role}_rank']
+                        division = account[f'{role}_division']
                         if rank and division:
                             emoji = models.ROLE_EMOJIS.get(role, "")
                             rank_display = models.get_rank_display(rank)
