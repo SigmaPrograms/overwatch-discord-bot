@@ -38,7 +38,7 @@ class SessionView(discord.ui.View):
             return None
     
     async def get_queue_info(self) -> tuple[int, Dict[str, int]]:
-        """Get queue count and role distribution."""
+        """Get queue count and role distribution from participants."""
         try:
             # Get queue count
             queue_rows = await database.db.fetch(
@@ -47,8 +47,18 @@ class SessionView(discord.ui.View):
             )
             queue_count = queue_rows[0]['count'] if queue_rows else 0
             
-            # Get role distribution (simplified - would need more complex logic for actual implementation)
+            # Get role distribution from accepted participants
+            participants = await database.db.fetch(
+                """SELECT role FROM session_participants 
+                   WHERE session_id = ?""",
+                self.session_id
+            )
+            
             role_counts = {"tank": 0, "dps": 0, "support": 0}
+            for participant in participants:
+                role = participant['role']
+                if role in role_counts:
+                    role_counts[role] += 1
             
             return queue_count, role_counts
         except Exception:
@@ -735,6 +745,9 @@ class PlayerAcceptanceView(discord.ui.View):
                 ephemeral=True
             )
             
+            # Update the global session display
+            await self._update_session_display()
+            
             # Disable the view since player is now accepted
             for item in self.children:
                 item.disabled = True
@@ -746,6 +759,60 @@ class PlayerAcceptanceView(discord.ui.View):
                 f"Error accepting player: {str(e)}",
                 ephemeral=True
             )
+    
+    async def _update_session_display(self):
+        """Update the global session display with current participants and queue info."""
+        try:
+            # Get session data
+            session_data = await database.db.fetchrow(
+                "SELECT * FROM sessions WHERE id = ?",
+                self.session_id
+            )
+            
+            if not session_data:
+                return
+            
+            session_dict = dict(session_data)
+            
+            # Get current queue count
+            queue_rows = await database.db.fetch(
+                "SELECT COUNT(*) as count FROM session_queue WHERE session_id = ?",
+                self.session_id
+            )
+            queue_count = queue_rows[0]['count'] if queue_rows else 0
+            
+            # Get current role distribution from participants
+            participants = await database.db.fetch(
+                """SELECT role FROM session_participants 
+                   WHERE session_id = ?""",
+                self.session_id
+            )
+            
+            role_counts = {"tank": 0, "dps": 0, "support": 0}
+            for participant in participants:
+                role = participant['role']
+                if role in role_counts:
+                    role_counts[role] += 1
+            
+            # Create updated embed
+            embed = embeds.session_embed(session_dict, queue_count, role_counts)
+            
+            # Get the message ID and update it
+            message_id = session_dict.get('message_id')
+            if message_id:
+                try:
+                    # Get the channel and update the message
+                    channel = self.bot.get_channel(session_dict['channel_id'])
+                    if channel:
+                        message = await channel.fetch_message(message_id)
+                        await message.edit(embed=embed)
+                except Exception:
+                    # If we can't update the message, that's ok - it might have been deleted
+                    pass
+                    
+        except Exception:
+            # Don't let session display updates break the main functionality
+            pass
     
     @discord.ui.button(label="Reject Player", style=discord.ButtonStyle.red, emoji="❌")
     async def reject_player(self, interaction: Interaction, button: discord.ui.Button):
@@ -764,6 +831,9 @@ class PlayerAcceptanceView(discord.ui.View):
                 f"❌ Rejected **{username}** and removed from queue.",
                 ephemeral=True
             )
+            
+            # Update the global session display
+            await self._update_session_display()
             
             # Disable the view since player is now rejected
             for item in self.children:
