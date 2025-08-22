@@ -160,8 +160,8 @@ def profile_embed(user_data: Dict[str, Any], accounts: List[Dict[str, Any]]) -> 
     # Add accounts
     if accounts:
         for i, account in enumerate(accounts):
-            account_name = account.get('account_name', f'Account {i+1}')
-            is_primary = account.get('is_primary', False)
+            account_name = account['account_name'] if 'account_name' in account else f'Account {i+1}'
+            is_primary = account['is_primary'] if 'is_primary' in account else False
             
             account_title = f"🎮 {account_name}"
             if is_primary:
@@ -171,8 +171,8 @@ def profile_embed(user_data: Dict[str, Any], accounts: List[Dict[str, Any]]) -> 
             
             # Add ranks for each role
             for role in ['tank', 'dps', 'support']:
-                rank = account.get(f'{role}_rank')
-                division = account.get(f'{role}_division')
+                rank = account[f'{role}_rank']
+                division = account[f'{role}_division']
                 
                 if rank and division:
                     rank_display = models.get_rank_display(rank)
