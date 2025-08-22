@@ -410,6 +410,13 @@ class QueueManagementView(discord.ui.View):
                             rank_display = models.get_rank_display(rank)
                             ranks.append(f"  {emoji} {rank_display} {division}")
                     
+                    # Add 6v6 rank
+                    sixv6_rank = account.get('sixv6_rank')
+                    sixv6_division = account.get('sixv6_division')
+                    if sixv6_rank and sixv6_division:
+                        rank_display = models.get_rank_display(sixv6_rank)
+                        ranks.append(f"  🎯 {rank_display} {sixv6_division}")
+                    
                     if ranks:
                         field_value += "\n".join(ranks) + "\n"
                     else:
@@ -451,6 +458,7 @@ class QueueManagementView(discord.ui.View):
         
         # Show player details and account selection
         view = PlayerAcceptanceView(self.bot, self.session_id, self.creator_id, selected_entry)
+        await view.setup_view()  # Setup the view based on game mode
         embed = await view.create_player_embed()
         
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
@@ -548,10 +556,27 @@ class PlayerAcceptanceView(discord.ui.View):
         self.queue_entry = queue_entry
         self.selected_account = None
         self.selected_role = None
+        self.session_data = None
         
         # Initialize account select with placeholder
         self.account_select.options = [discord.SelectOption(label="Loading accounts...", value="loading")]
         self.account_select.disabled = True
+    
+    async def setup_view(self):
+        """Setup the view based on the session game mode."""
+        # Get session data to check game mode
+        self.session_data = await database.db.fetchrow(
+            "SELECT * FROM sessions WHERE id = ?", self.session_id
+        )
+        
+        # If 6v6 mode, remove the role selector
+        if self.session_data and self.session_data['game_mode'] == models.GameMode.SIX_V_SIX:
+            # Find and remove the role selector
+            for item in self.children[:]:  # Copy list to avoid modification during iteration
+                if hasattr(item, 'custom_id') and item.custom_id == 'role_select':
+                    self.remove_item(item)
+                elif isinstance(item, discord.ui.Select) and item.placeholder == "Select role...":
+                    self.remove_item(item)
     
     async def interaction_check(self, interaction: Interaction) -> bool:
         """Ensure only the session creator can use this view."""
@@ -612,6 +637,13 @@ class PlayerAcceptanceView(discord.ui.View):
                         emoji = models.ROLE_EMOJIS.get(role, "")
                         rank_display = models.get_rank_display(rank)
                         ranks.append(f"  {emoji} {rank_display} {division}")
+                
+                # Add 6v6 rank
+                sixv6_rank = account.get('sixv6_rank')
+                sixv6_division = account.get('sixv6_division')
+                if sixv6_rank and sixv6_division:
+                    rank_display = models.get_rank_display(sixv6_rank)
+                    ranks.append(f"  🎯 {rank_display} {sixv6_division}")
                 
                 if ranks:
                     account_info.extend(ranks)
@@ -686,7 +718,8 @@ class PlayerAcceptanceView(discord.ui.View):
             discord.SelectOption(label="Tank", emoji="🛡️", value="tank"),
             discord.SelectOption(label="DPS", emoji="⚔️", value="dps"),
             discord.SelectOption(label="Support", emoji="💉", value="support")
-        ]
+        ],
+        custom_id="role_select"
     )
     async def role_select(self, interaction: Interaction, select: discord.ui.Select):
         """Handle role selection."""
@@ -705,7 +738,17 @@ class PlayerAcceptanceView(discord.ui.View):
         """Accept the player into the session."""
         await interaction.response.defer()
         
-        if not self.selected_account or not self.selected_role:
+        # Check if this is a 6v6 session (no role required)
+        is_sixv6 = self.session_data and self.session_data['game_mode'] == models.GameMode.SIX_V_SIX
+        
+        if not self.selected_account:
+            await interaction.followup.send(
+                "Please select an account before accepting.",
+                ephemeral=True
+            )
+            return
+        
+        if not is_sixv6 and not self.selected_role:
             await interaction.followup.send(
                 "Please select both an account and a role before accepting.",
                 ephemeral=True
@@ -713,16 +756,27 @@ class PlayerAcceptanceView(discord.ui.View):
             return
         
         try:
-            # Check if player is already accepted in this role
-            existing = await database.db.fetchrow(
-                """SELECT * FROM session_participants 
-                   WHERE session_id = ? AND user_id = ? AND role = ?""",
-                self.session_id, self.queue_entry['user_id'], self.selected_role
-            )
+            # For 6v6, use 'player' as the role since it's not role-restricted
+            role_to_use = 'player' if is_sixv6 else self.selected_role
+            
+            # Check if player is already accepted
+            if is_sixv6:
+                existing = await database.db.fetchrow(
+                    """SELECT * FROM session_participants 
+                       WHERE session_id = ? AND user_id = ?""",
+                    self.session_id, self.queue_entry['user_id']
+                )
+            else:
+                existing = await database.db.fetchrow(
+                    """SELECT * FROM session_participants 
+                       WHERE session_id = ? AND user_id = ? AND role = ?""",
+                    self.session_id, self.queue_entry['user_id'], self.selected_role
+                )
             
             if existing:
+                role_msg = "in this session" if is_sixv6 else f"as {self.selected_role}"
                 await interaction.followup.send(
-                    f"Player is already accepted as {self.selected_role}.",
+                    f"Player is already accepted {role_msg}.",
                     ephemeral=True
                 )
                 return
@@ -733,7 +787,7 @@ class PlayerAcceptanceView(discord.ui.View):
                    (session_id, user_id, account_id, role, is_streaming, selected_by)
                    VALUES (?, ?, ?, ?, ?, ?)""",
                 self.session_id, self.queue_entry['user_id'], self.selected_account['id'],
-                self.selected_role, self.queue_entry['is_streaming'], self.creator_id
+                role_to_use, self.queue_entry['is_streaming'], self.creator_id
             )
             
             # Remove from queue
@@ -744,12 +798,14 @@ class PlayerAcceptanceView(discord.ui.View):
             
             username = self.queue_entry['username']
             account_name = self.selected_account['account_name']
-            role_emoji = models.ROLE_EMOJIS.get(self.selected_role, "")
             
-            await interaction.followup.send(
-                f"✅ Accepted **{username}** ({account_name}) as {role_emoji} {self.selected_role.title()}!",
-                ephemeral=True
-            )
+            if is_sixv6:
+                success_message = f"✅ Accepted **{username}** ({account_name}) into the 6v6 session!"
+            else:
+                role_emoji = models.ROLE_EMOJIS.get(self.selected_role, "")
+                success_message = f"✅ Accepted **{username}** ({account_name}) as {role_emoji} {self.selected_role.title()}!"
+            
+            await interaction.followup.send(success_message, ephemeral=True)
             
             # Update the global session display
             await self._update_session_display()
@@ -882,6 +938,11 @@ class PlayerAcceptanceView(discord.ui.View):
                 rank = account[f'{role}_rank']
                 if rank:
                     ranks.append(f"{role}: {rank.title()}")
+            
+            # Add 6v6 rank
+            sixv6_rank = account.get('sixv6_rank')
+            if sixv6_rank:
+                ranks.append(f"6v6: {sixv6_rank.title()}")
             
             description = ", ".join(ranks[:2]) if ranks else "No ranks"
             if len(description) > 50:

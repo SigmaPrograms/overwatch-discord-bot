@@ -100,8 +100,13 @@ def session_embed(session_data: Dict[str, Any], queue_count: int = 0,
             
             # Format the participant line
             streaming_indicator = "📺 " if is_streaming else ""
-            role_emoji = models.ROLE_EMOJIS.get(role, "")
-            participant_info.append(f"{streaming_indicator}{role_emoji} **{username}** ({account_name})")
+            
+            # For 6v6, don't show role emojis since it's not role-restricted
+            if game_mode == models.GameMode.SIX_V_SIX:
+                participant_info.append(f"{streaming_indicator}**{username}** ({account_name})")
+            else:
+                role_emoji = models.ROLE_EMOJIS.get(role, "")
+                participant_info.append(f"{streaming_indicator}{role_emoji} **{username}** ({account_name})")
         
         if participant_info:
             embed.add_field(
@@ -118,8 +123,18 @@ def session_embed(session_data: Dict[str, Any], queue_count: int = 0,
                     inline=False
                 )
     
-    # Add role requirements
-    if game_mode in models.GAME_MODE_REQUIREMENTS:
+    # Add role requirements or player count for 6v6
+    if game_mode == models.GameMode.SIX_V_SIX:
+        # For 6v6, show total players instead of role breakdown
+        total_players = len(participants) if participants else 0
+        team_size = models.get_game_mode_team_size(game_mode)
+        status_emoji = "✅" if total_players >= team_size else "❌"
+        embed.add_field(
+            name="👥 Team Composition",
+            value=f"{status_emoji} Players: {total_players}/{team_size}",
+            inline=False
+        )
+    elif game_mode in models.GAME_MODE_REQUIREMENTS:
         requirements = models.GAME_MODE_REQUIREMENTS[game_mode]
         role_info = []
         
@@ -209,6 +224,13 @@ def profile_embed(user_data: Dict[str, Any], accounts: List[Dict[str, Any]]) -> 
                     rank_display = models.get_rank_display(rank)
                     emoji = models.ROLE_EMOJIS.get(role, "")
                     account_info.append(f"{emoji} {role.title()}: {rank_display} {division}")
+            
+            # Add 6v6 rank
+            sixv6_rank = account.get('sixv6_rank')
+            sixv6_division = account.get('sixv6_division')
+            if sixv6_rank and sixv6_division:
+                rank_display = models.get_rank_display(sixv6_rank)
+                account_info.append(f"🎯 6v6: {rank_display} {sixv6_division}")
             
             embed.add_field(
                 name=account_title,
