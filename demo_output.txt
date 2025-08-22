@@ -1,0 +1,58 @@
+🎮 Session Display Demo - Before and After Accepting Players
+
+🔶 NEW SESSION (No Accepted Players Yet)
+=======================================
+📌 **🎮 Overwatch 5v5 Session #1**
+📝 Competitive 5v5 - Looking for skilled players!
+
+**⏰ Scheduled Time**
+   <t:1755862058:F>
+   (<t:1755862058:R>)
+
+**📊 Status**
+   🟢 Open
+
+**👥 Queue**
+   3 waiting
+
+**🎯 Role Requirements**
+   ❌ 🛡️ Tank: 0/1
+   ❌ ⚔️ Dps: 0/2
+   ❌ 💉 Support: 0/2
+
+💡 Use the buttons below to join, leave, or manage this session.
+--------------------------------------------------
+
+🔶 SESSION WITH ACCEPTED PLAYERS
+===============================
+📌 **🎮 Overwatch 5v5 Session #1**
+📝 Competitive 5v5 - Looking for skilled players!
+
+**⏰ Scheduled Time**
+   <t:1755862058:F>
+   (<t:1755862058:R>)
+
+**📊 Status**
+   🟢 Open
+
+**👥 Queue**
+   1 waiting
+
+**✅ Accepted Players (2)**
+   🛡️ **FlexPlayer** (FlexPlayer#9999)
+   📺 ⚔️ **AwesomeDPS** (AwesomeDPS#1337)
+
+**🎯 Role Requirements**
+   ✅ 🛡️ Tank: 1/1
+   ❌ ⚔️ Dps: 1/2
+   ❌ 💉 Support: 0/2
+
+💡 Use the buttons below to join, leave, or manage this session.
+--------------------------------------------------
+
+🎯 Key Changes:
+   ✅ Now shows accepted player names and their Battle.net accounts
+   ✅ Displays role emojis (🛡️ Tank, ⚔️ DPS, 💉 Support)
+   ✅ Shows streaming status with 📺 emoji
+   ✅ Updates role requirements to reflect accepted players
+   ✅ Queue count shows remaining players waiting
