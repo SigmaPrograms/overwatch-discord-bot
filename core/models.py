@@ -59,9 +59,8 @@ GAME_MODE_REQUIREMENTS = {
         Role.SUPPORT: 2
     },
     GameMode.SIX_V_SIX: {
-        Role.TANK: 2,
-        Role.DPS: 2,
-        Role.SUPPORT: 2
+        # 6v6 is not role-restricted, so no role requirements
+        # Total players: 6
     },
     GameMode.STADIUM: {
         Role.TANK: 0,
@@ -196,3 +195,18 @@ def get_all_roles() -> List[str]:
 def get_all_game_modes() -> List[str]:
     """Get all available game mode names."""
     return [mode.value for mode in GameMode]
+
+def get_game_mode_team_size(game_mode: str) -> int:
+    """Get the total team size for a game mode."""
+    if game_mode == GameMode.FIVE_V_FIVE:
+        return 5
+    elif game_mode == GameMode.SIX_V_SIX:
+        return 6
+    elif game_mode == GameMode.STADIUM:
+        return 6
+    else:
+        return 5  # Default fallback
+
+def is_role_restricted_mode(game_mode: str) -> bool:
+    """Check if a game mode requires specific role assignments."""
+    return game_mode != GameMode.SIX_V_SIX

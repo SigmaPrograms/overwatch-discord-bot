@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS user_accounts (
     dps_division INTEGER,
     support_rank TEXT,
     support_division INTEGER,
+    sixv6_rank TEXT,
+    sixv6_division INTEGER,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (discord_id) REFERENCES users(discord_id) ON DELETE CASCADE,
     UNIQUE(discord_id, account_name)
@@ -107,7 +109,24 @@ class Database:
         
         # Create tables
         await self.conn.executescript(CREATE_STATEMENTS)
+        
+        # Run migrations
+        await self._run_migrations()
+        
         await self.conn.commit()
+
+    async def _run_migrations(self):
+        """Run database migrations for schema updates."""
+        # Check if 6v6 rank columns exist
+        cursor = await self.conn.execute("PRAGMA table_info(user_accounts)")
+        columns = await cursor.fetchall()
+        column_names = [col[1] for col in columns]
+        
+        if 'sixv6_rank' not in column_names:
+            await self.conn.execute("ALTER TABLE user_accounts ADD COLUMN sixv6_rank TEXT")
+            
+        if 'sixv6_division' not in column_names:
+            await self.conn.execute("ALTER TABLE user_accounts ADD COLUMN sixv6_division INTEGER")
 
     async def close(self):
         """Close database connection."""

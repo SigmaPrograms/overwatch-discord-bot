@@ -105,12 +105,15 @@ class ProfileCog(commands.Cog):
         dps_rank="Your DPS rank", 
         dps_div="Your DPS division (1-5)",
         support_rank="Your support rank",
-        support_div="Your support division (1-5)"
+        support_div="Your support division (1-5)",
+        sixv6_rank="Your 6v6 rank",
+        sixv6_div="Your 6v6 division (1-5)"
     )
     async def add_account(self, interaction: Interaction, account_name: str, is_primary: bool,
                          tank_rank: Optional[str] = None, tank_div: Optional[int] = None,
                          dps_rank: Optional[str] = None, dps_div: Optional[int] = None,
-                         support_rank: Optional[str] = None, support_div: Optional[int] = None):
+                         support_rank: Optional[str] = None, support_div: Optional[int] = None,
+                         sixv6_rank: Optional[str] = None, sixv6_div: Optional[int] = None):
         """Add a new Battle.net account to your profile with its ranks."""
         await interaction.response.defer(ephemeral=True)
         
@@ -134,7 +137,8 @@ class ProfileCog(commands.Cog):
             ranks_to_validate = [
                 (tank_rank, tank_div, "tank"),
                 (dps_rank, dps_div, "dps"),
-                (support_rank, support_div, "support")
+                (support_rank, support_div, "support"),
+                (sixv6_rank, sixv6_div, "6v6")
             ]
             
             for rank, div, role in ranks_to_validate:
@@ -184,12 +188,14 @@ class ProfileCog(commands.Cog):
             await database.db.execute(
                 """INSERT INTO user_accounts 
                    (discord_id, account_name, is_primary, tank_rank, tank_division,
-                    dps_rank, dps_division, support_rank, support_division)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    dps_rank, dps_division, support_rank, support_division, 
+                    sixv6_rank, sixv6_division)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 interaction.user.id, account_name, is_primary,
                 tank_rank.lower() if tank_rank else None, tank_div,
                 dps_rank.lower() if dps_rank else None, dps_div,
-                support_rank.lower() if support_rank else None, support_div
+                support_rank.lower() if support_rank else None, support_div,
+                sixv6_rank.lower() if sixv6_rank else None, sixv6_div
             )
             
             # Build success message
@@ -197,7 +203,10 @@ class ProfileCog(commands.Cog):
             for rank, div, role in ranks_to_validate:
                 if rank and div:
                     rank_display = models.get_rank_display(rank)
-                    emoji = models.ROLE_EMOJIS.get(role, "")
+                    if role == "6v6":
+                        emoji = "🎯"  # Special emoji for 6v6
+                    else:
+                        emoji = models.ROLE_EMOJIS.get(role, "")
                     rank_info.append(f"{emoji} {role.title()}: {rank_display} {div}")
             
             success_msg = f"Account '{account_name}' added successfully!"
@@ -227,13 +236,16 @@ class ProfileCog(commands.Cog):
         dps_rank="Your DPS rank",
         dps_div="Your DPS division (1-5)", 
         support_rank="Your support rank",
-        support_div="Your support division (1-5)"
+        support_div="Your support division (1-5)",
+        sixv6_rank="Your 6v6 rank",
+        sixv6_div="Your 6v6 division (1-5)"
     )
     async def edit_account(self, interaction: Interaction, account_name: str,
                           new_account_name: Optional[str] = None, is_primary: Optional[bool] = None,
                           tank_rank: Optional[str] = None, tank_div: Optional[int] = None,
                           dps_rank: Optional[str] = None, dps_div: Optional[int] = None,
-                          support_rank: Optional[str] = None, support_div: Optional[int] = None):
+                          support_rank: Optional[str] = None, support_div: Optional[int] = None,
+                          sixv6_rank: Optional[str] = None, sixv6_div: Optional[int] = None):
         """Edit the details of one of your existing accounts."""
         await interaction.response.defer(ephemeral=True)
         
@@ -257,7 +269,8 @@ class ProfileCog(commands.Cog):
             ranks_to_validate = [
                 (tank_rank, tank_div, "tank"),
                 (dps_rank, dps_div, "dps"),
-                (support_rank, support_div, "support")
+                (support_rank, support_div, "support"),
+                (sixv6_rank, sixv6_div, "6v6")
             ]
             
             for rank, div, role in ranks_to_validate:
@@ -323,6 +336,14 @@ class ProfileCog(commands.Cog):
             if support_div is not None:
                 updates.append("support_division = ?")
                 params.append(support_div)
+            
+            if sixv6_rank is not None:
+                updates.append("sixv6_rank = ?")
+                params.append(sixv6_rank.lower() if sixv6_rank else None)
+            
+            if sixv6_div is not None:
+                updates.append("sixv6_division = ?")
+                params.append(sixv6_div)
             
             if not updates:
                 await interaction.followup.send(
@@ -399,9 +420,11 @@ class ProfileCog(commands.Cog):
     @add_account.autocomplete('tank_rank')
     @add_account.autocomplete('dps_rank')
     @add_account.autocomplete('support_rank')
+    @add_account.autocomplete('sixv6_rank')
     @edit_account.autocomplete('tank_rank')
     @edit_account.autocomplete('dps_rank')
     @edit_account.autocomplete('support_rank')
+    @edit_account.autocomplete('sixv6_rank')
     async def rank_autocomplete(self, interaction: Interaction, current: str) -> List[app_commands.Choice[str]]:
         """Autocomplete for rank fields."""
         ranks = models.get_all_ranks()
