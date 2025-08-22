@@ -59,8 +59,19 @@ class ManageCog(commands.Cog):
                 session_id
             )
             
+            # Get accepted participants
+            participants = await database.db.fetch(
+                """SELECT sp.*, u.username, ua.account_name 
+                   FROM session_participants sp
+                   JOIN users u ON sp.user_id = u.discord_id
+                   JOIN user_accounts ua ON sp.account_id = ua.id
+                   WHERE sp.session_id = ?
+                   ORDER BY sp.selected_at ASC""",
+                session_id
+            )
+            
             # Create management embed
-            embed = await self._create_management_embed(dict(session), queue_entries)
+            embed = await self._create_management_embed(dict(session), queue_entries, participants)
             
             # Create management view
             view = ui.ManageSessionView(self.bot, session_id, interaction.user.id)
@@ -73,8 +84,11 @@ class ManageCog(commands.Cog):
                 ephemeral=True
             )
     
-    async def _create_management_embed(self, session_data: Dict[str, Any], queue_entries: List[Any]) -> discord.Embed:
+    async def _create_management_embed(self, session_data: Dict[str, Any], queue_entries: List[Any], participants: List[Any] = None) -> discord.Embed:
         """Create the management dashboard embed."""
+        if participants is None:
+            participants = []
+            
         session_id = session_data.get('id', 'N/A')
         game_mode = session_data.get('game_mode', 'Unknown')
         status = session_data.get('status', 'UNKNOWN')
@@ -114,10 +128,53 @@ class ManageCog(commands.Cog):
                     inline=False
                 )
         
+        # Add accepted participants section
+        if participants:
+            participant_info = []
+            role_counts = {"tank": 0, "dps": 0, "support": 0}
+            
+            for participant in participants:
+                username = participant['username'] or "Unknown User"
+                account_name = participant['account_name'] or "Unknown Account"
+                role = participant['role']
+                is_streaming = participant['is_streaming']
+                
+                role_counts[role] += 1
+                
+                streaming_indicator = "📺 " if is_streaming else ""
+                role_emoji = models.ROLE_EMOJIS.get(role, "")
+                
+                participant_info.append(f"{streaming_indicator}{role_emoji} **{username}** ({account_name})")
+            
+            embed.add_field(
+                name=f"✅ Accepted Players ({len(participants)})",
+                value="\n".join(participant_info[:10]) if participant_info else "No players accepted",
+                inline=False
+            )
+            
+            # Add role fulfillment for accepted players
+            if game_mode in models.GAME_MODE_REQUIREMENTS:
+                requirements = models.GAME_MODE_REQUIREMENTS[game_mode]
+                role_distribution = []
+                
+                for role, needed in requirements.items():
+                    if needed > 0:
+                        accepted = role_counts.get(role, 0)
+                        emoji = models.ROLE_EMOJIS.get(role, "")
+                        status_emoji = "✅" if accepted >= needed else "❌"
+                        role_distribution.append(f"{status_emoji} {emoji} {role.title()}: {accepted}/{needed}")
+                
+                if role_distribution:
+                    embed.add_field(
+                        name="🎯 Team Composition",
+                        value="\n".join(role_distribution),
+                        inline=False
+                    )
+        
         # Add queue information
         if queue_entries:
             queue_info = []
-            role_counts = {"tank": 0, "dps": 0, "support": 0}
+            queue_role_counts = {"tank": 0, "dps": 0, "support": 0}
             
             for entry in queue_entries:
                 username = entry['username'] or "Unknown User"
@@ -127,8 +184,8 @@ class ManageCog(commands.Cog):
                 
                 # Count preferred roles (simplified)
                 for role in preferred_roles:
-                    if role in role_counts:
-                        role_counts[role] += 1
+                    if role in queue_role_counts:
+                        queue_role_counts[role] += 1
                 
                 streaming_indicator = "📺 " if is_streaming else ""
                 roles_str = ", ".join(preferred_roles) if preferred_roles else "No preference"
@@ -136,7 +193,7 @@ class ManageCog(commands.Cog):
                 queue_info.append(f"{streaming_indicator}**{username}** ({account_name}) - {roles_str}")
             
             embed.add_field(
-                name=f"👥 Queue ({len(queue_entries)} players)",
+                name=f"⏳ Queue ({len(queue_entries)} waiting)",
                 value="\n".join(queue_info[:10]) if queue_info else "No players in queue",
                 inline=False
             )
@@ -147,27 +204,9 @@ class ManageCog(commands.Cog):
                     value=f"And {len(queue_entries) - 10} more players",
                     inline=False
                 )
-            
-            # Add role distribution
-            if game_mode in models.GAME_MODE_REQUIREMENTS:
-                requirements = models.GAME_MODE_REQUIREMENTS[game_mode]
-                role_distribution = []
-                
-                for role, needed in requirements.items():
-                    if needed > 0:
-                        available = role_counts.get(role, 0)
-                        emoji = models.ROLE_EMOJIS.get(role, "")
-                        role_distribution.append(f"{emoji} {role.title()}: {available} available (need {needed})")
-                
-                if role_distribution:
-                    embed.add_field(
-                        name="🎯 Role Distribution",
-                        value="\n".join(role_distribution),
-                        inline=False
-                    )
         else:
             embed.add_field(
-                name="👥 Queue",
+                name="⏳ Queue",
                 value="No players in queue",
                 inline=False
             )
