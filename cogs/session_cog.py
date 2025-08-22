@@ -14,16 +14,60 @@ class SessionCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
     
+    @app_commands.command(name="create-session-ui")
+    async def create_session_ui(self, interaction: Interaction):
+        """Create a new game session using an interactive interface."""
+        await interaction.response.defer(ephemeral=True)
+        
+        try:
+            # Validate user has profile
+            user_profile = await database.db.fetchrow(
+                "SELECT * FROM users WHERE discord_id = ?",
+                interaction.user.id
+            )
+            if not user_profile:
+                await interaction.followup.send(
+                    embed=embeds.error_embed(
+                        "Profile Required",
+                        "You need to set up your profile first. Use `/setup-profile`."
+                    ),
+                    ephemeral=True
+                )
+                return
+            
+            # Get user's timezone from profile
+            user_timezone = user_profile['timezone']
+            
+            # Create initial embed
+            embed = discord.Embed(
+                title="🎮 Create New Session",
+                description=f"Let's create your Overwatch session step by step!\n\n"
+                           f"**Your Timezone:** {user_timezone}\n"
+                           f"First, select the game mode you want to play:",
+                color=discord.Color.green()
+            )
+            
+            # Create the session creation view
+            view = ui.SessionCreationView(self.bot, interaction.user.id, user_timezone)
+            
+            await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+            
+        except Exception as e:
+            await interaction.followup.send(
+                embed=embeds.error_embed("Error", f"Failed to start session creation: {str(e)}"),
+                ephemeral=True
+            )
+
     @app_commands.command(name="create-session")
     @app_commands.describe(
         game_mode="Game mode to play",
         time="Session time in format YYYY-MM-DDTHH:MM (e.g., 2024-12-25T19:30)",
-        timezone="Your timezone (e.g., America/New_York)",
+        timezone="Your timezone (e.g., America/New_York) - leave empty to use profile timezone",
         description="Optional description for the session",
         max_rank_diff="Maximum rank difference allowed (0 to disable)"
     )
     async def create_session(self, interaction: Interaction, game_mode: str, time: str, 
-                           timezone: str, description: Optional[str] = None, 
+                           timezone: Optional[str] = None, description: Optional[str] = None, 
                            max_rank_diff: Optional[int] = None):
         """Create a new game session for others to join."""
         await interaction.response.defer()
@@ -44,6 +88,10 @@ class SessionCog(commands.Cog):
                 )
                 return
             
+            # Use profile timezone if not provided
+            if timezone is None:
+                timezone = user_profile['timezone']
+                
             # Validate game mode
             if not models.validate_game_mode(game_mode):
                 valid_modes = ', '.join(models.get_all_game_modes())
