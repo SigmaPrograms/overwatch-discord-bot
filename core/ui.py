@@ -7,6 +7,7 @@ from typing import Dict, Any, Optional, List
 import json
 import asyncio
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from core import database, models, embeds, errors, timeutil
 
@@ -853,6 +854,423 @@ class RoleSelectView(discord.ui.View):
         """Handle role selection."""
         self.selected_roles = select.values
         await self.callback_func(interaction, self.selected_roles)
+
+class SessionCreationView(discord.ui.View):
+    """Enhanced view for creating sessions with calendar-style date/time selection."""
+    
+    def __init__(self, bot: commands.Bot, creator_id: int, user_timezone: str):
+        super().__init__(timeout=300)  # 5 minute timeout
+        self.bot = bot
+        self.creator_id = creator_id
+        self.user_timezone = user_timezone
+        
+        # Session data being built
+        self.game_mode = None
+        self.selected_date = None
+        self.selected_time = None
+        self.description = None
+        self.max_rank_diff = None
+        
+        # Initialize with game mode selection
+        self.update_view_for_game_mode()
+    
+    def update_view_for_game_mode(self):
+        """Update view to show game mode selection."""
+        self.clear_items()
+        
+        # Add game mode select
+        game_modes = models.get_all_game_modes()
+        options = [
+            discord.SelectOption(
+                label=mode.replace('_', ' ').title(), 
+                value=mode,
+                description=f"Play {mode.replace('_', ' ')}"
+            ) for mode in game_modes
+        ]
+        
+        select = discord.ui.Select(
+            placeholder="Select a game mode...",
+            options=options,
+            custom_id="game_mode_select"
+        )
+        select.callback = self.game_mode_callback
+        self.add_item(select)
+    
+    async def game_mode_callback(self, interaction: Interaction):
+        """Handle game mode selection."""
+        self.game_mode = interaction.data['values'][0]
+        await interaction.response.defer()
+        
+        # Update to date selection
+        self.update_view_for_date()
+        
+        embed = discord.Embed(
+            title="📅 Select Session Date",
+            description=f"**Game Mode:** {self.game_mode.replace('_', ' ').title()}\n\nSelect a date for your session:",
+            color=discord.Color.blue()
+        )
+        
+        await interaction.edit_original_response(embed=embed, view=self)
+    
+    def update_view_for_date(self):
+        """Update view to show date selection."""
+        self.clear_items()
+        
+        # Add date selection buttons for next 7 days
+        from datetime import datetime, timedelta
+        now = timeutil.now_utc()
+        user_now = timeutil.utc_to_local(now, self.user_timezone)
+        
+        # Create a row of date buttons
+        for i in range(7):
+            target_date = user_now.date() + timedelta(days=i)
+            
+            if i == 0:
+                label = "Today"
+            elif i == 1:
+                label = "Tomorrow"
+            else:
+                label = target_date.strftime("%m/%d")
+            
+            button = discord.ui.Button(
+                label=label,
+                style=discord.ButtonStyle.secondary,
+                custom_id=f"date_{target_date.isoformat()}"
+            )
+            button.callback = self.date_callback
+            self.add_item(button)
+            
+            # Add row break after 5 buttons
+            if i == 4:
+                break
+        
+        # Add second row for remaining days
+        for i in range(5, 7):
+            target_date = user_now.date() + timedelta(days=i)
+            label = target_date.strftime("%m/%d")
+            
+            button = discord.ui.Button(
+                label=label,
+                style=discord.ButtonStyle.secondary,
+                custom_id=f"date_{target_date.isoformat()}"
+            )
+            button.callback = self.date_callback
+            self.add_item(button)
+    
+    async def date_callback(self, interaction: Interaction):
+        """Handle date selection."""
+        date_str = interaction.data['custom_id'].replace('date_', '')
+        from datetime import datetime
+        self.selected_date = datetime.fromisoformat(date_str).date()
+        
+        await interaction.response.defer()
+        
+        # Update to time selection
+        self.update_view_for_time()
+        
+        embed = discord.Embed(
+            title="🕐 Select Session Time",
+            description=f"**Game Mode:** {self.game_mode.replace('_', ' ').title()}\n"
+                       f"**Date:** {self.selected_date.strftime('%A, %B %d, %Y')}\n\n"
+                       f"Select a time (in your timezone: {self.user_timezone}):",
+            color=discord.Color.blue()
+        )
+        
+        await interaction.edit_original_response(embed=embed, view=self)
+    
+    def update_view_for_time(self):
+        """Update view to show time selection."""
+        self.clear_items()
+        
+        # Common gaming hours - add morning, afternoon, evening slots
+        time_slots = [
+            ("9:00 AM", "09:00"),
+            ("12:00 PM", "12:00"),
+            ("3:00 PM", "15:00"),
+            ("6:00 PM", "18:00"),
+            ("9:00 PM", "21:00"),
+        ]
+        
+        for label, time_value in time_slots:
+            button = discord.ui.Button(
+                label=label,
+                style=discord.ButtonStyle.secondary,
+                custom_id=f"time_{time_value}"
+            )
+            button.callback = self.time_callback
+            self.add_item(button)
+        
+        # Add custom time input button
+        custom_button = discord.ui.Button(
+            label="⏰ Custom Time",
+            style=discord.ButtonStyle.primary,
+            custom_id="custom_time"
+        )
+        custom_button.callback = self.custom_time_callback
+        self.add_item(custom_button)
+    
+    async def time_callback(self, interaction: Interaction):
+        """Handle time selection."""
+        time_str = interaction.data['custom_id'].replace('time_', '')
+        from datetime import datetime
+        self.selected_time = datetime.strptime(time_str, "%H:%M").time()
+        
+        await interaction.response.defer()
+        
+        # Move to final confirmation
+        await self.show_final_confirmation(interaction)
+    
+    async def custom_time_callback(self, interaction: Interaction):
+        """Handle custom time input."""
+        modal = TimeInputModal(self)
+        await interaction.response.send_modal(modal)
+    
+    async def set_custom_time(self, time_obj):
+        """Set custom time from modal."""
+        self.selected_time = time_obj
+    
+    async def show_final_confirmation(self, interaction: Interaction):
+        """Show final confirmation before creating session."""
+        self.clear_items()
+        
+        # Combine date and time
+        from datetime import datetime
+        naive_dt = datetime.combine(self.selected_date, self.selected_time)
+        
+        # Convert to UTC for validation
+        utc_dt = timeutil.local_to_utc(naive_dt, self.user_timezone)
+        
+        # Check if time is in the future
+        if timeutil.is_past(utc_dt):
+            embed = discord.Embed(
+                title="❌ Invalid Time",
+                description="You cannot create a session for a time in the past. Please select a different time.",
+                color=discord.Color.red()
+            )
+            
+            # Go back to time selection
+            self.update_view_for_time()
+            
+            embed_time = discord.Embed(
+                title="🕐 Select Session Time",
+                description=f"**Game Mode:** {self.game_mode.replace('_', ' ').title()}\n"
+                           f"**Date:** {self.selected_date.strftime('%A, %B %d, %Y')}\n\n"
+                           f"Select a time (in your timezone: {self.user_timezone}):",
+                color=discord.Color.blue()
+            )
+            
+            await interaction.edit_original_response(embed=embed_time, view=self)
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
+        
+        # Create confirmation embed
+        local_time_str = timeutil.format_discord_timestamp(
+            naive_dt.replace(tzinfo=ZoneInfo(self.user_timezone)), 'F'
+        )
+        relative_time_str = timeutil.format_discord_timestamp(
+            naive_dt.replace(tzinfo=ZoneInfo(self.user_timezone)), 'R'
+        )
+        
+        embed = discord.Embed(
+            title="✅ Confirm Session Creation",
+            description=f"**Game Mode:** {self.game_mode.replace('_', ' ').title()}\n"
+                       f"**When:** {local_time_str}\n"
+                       f"**Relative:** {relative_time_str}\n"
+                       f"**Your Timezone:** {self.user_timezone}",
+            color=discord.Color.green()
+        )
+        
+        # Add confirmation buttons
+        confirm_button = discord.ui.Button(
+            label="✅ Create Session",
+            style=discord.ButtonStyle.success,
+            custom_id="confirm_create"
+        )
+        confirm_button.callback = self.confirm_create_callback
+        self.add_item(confirm_button)
+        
+        cancel_button = discord.ui.Button(
+            label="❌ Cancel",
+            style=discord.ButtonStyle.danger,
+            custom_id="cancel_create"
+        )
+        cancel_button.callback = self.cancel_create_callback
+        self.add_item(cancel_button)
+        
+        # Add optional settings button
+        settings_button = discord.ui.Button(
+            label="⚙️ Optional Settings",
+            style=discord.ButtonStyle.secondary,
+            custom_id="optional_settings"
+        )
+        settings_button.callback = self.optional_settings_callback
+        self.add_item(settings_button)
+        
+        await interaction.edit_original_response(embed=embed, view=self)
+    
+    async def confirm_create_callback(self, interaction: Interaction):
+        """Create the session."""
+        await interaction.response.defer()
+        
+        try:
+            # Combine date and time and convert to UTC
+            from datetime import datetime
+            naive_dt = datetime.combine(self.selected_date, self.selected_time)
+            utc_dt = timeutil.local_to_utc(naive_dt, self.user_timezone)
+            
+            # Create session in database
+            await database.db.execute(
+                """INSERT INTO sessions 
+                   (creator_id, guild_id, channel_id, game_mode, scheduled_time, 
+                    timezone, description, max_rank_diff, status)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'OPEN')""",
+                interaction.user.id, interaction.guild_id, interaction.channel_id,
+                self.game_mode, utc_dt.isoformat(), self.user_timezone, 
+                self.description, self.max_rank_diff
+            )
+            
+            # Get the created session ID
+            session_id = await database.db.get_last_insert_id()
+            
+            # Get session data for embed
+            session_data = await database.db.fetchrow(
+                "SELECT * FROM sessions WHERE id = ?", session_id
+            )
+            session_dict = dict(session_data)
+            
+            # Create session embed and view
+            embed = embeds.session_embed(session_dict, 0, {"tank": 0, "dps": 0, "support": 0})
+            view = SessionView(self.bot, session_id)
+            
+            # Send session message
+            message = await interaction.channel.send(embed=embed, view=view)
+            
+            # Update session with message ID
+            await database.db.execute(
+                "UPDATE sessions SET message_id = ? WHERE id = ?",
+                message.id, session_id
+            )
+            
+            # Send confirmation
+            success_embed = embeds.success_embed(
+                "Session Created",
+                f"Session #{session_id} has been created successfully!\n"
+                f"Players can now join using the buttons above."
+            )
+            
+            await interaction.edit_original_response(embed=success_embed, view=None)
+            
+        except Exception as e:
+            error_embed = embeds.error_embed("Creation Error", f"Failed to create session: {str(e)}")
+            await interaction.edit_original_response(embed=error_embed, view=None)
+    
+    async def cancel_create_callback(self, interaction: Interaction):
+        """Cancel session creation."""
+        embed = discord.Embed(
+            title="❌ Session Creation Cancelled",
+            description="Session creation has been cancelled.",
+            color=discord.Color.red()
+        )
+        await interaction.response.edit_message(embed=embed, view=None)
+    
+    async def optional_settings_callback(self, interaction: Interaction):
+        """Show optional settings modal."""
+        modal = OptionalSettingsModal(self)
+        await interaction.response.send_modal(modal)
+
+
+class TimeInputModal(discord.ui.Modal):
+    """Modal for custom time input."""
+    
+    def __init__(self, session_view: SessionCreationView):
+        super().__init__(title="Enter Custom Time")
+        self.session_view = session_view
+        
+        self.time_input = discord.ui.TextInput(
+            label="Time",
+            placeholder="Enter time in HH:MM format (24-hour), e.g., 14:30",
+            max_length=5,
+            min_length=4
+        )
+        self.add_item(self.time_input)
+    
+    async def on_submit(self, interaction: Interaction):
+        time_str = self.time_input.value.strip()
+        
+        try:
+            from datetime import datetime
+            time_obj = datetime.strptime(time_str, "%H:%M").time()
+            await self.session_view.set_custom_time(time_obj)
+            
+            await interaction.response.defer()
+            await self.session_view.show_final_confirmation(interaction)
+            
+        except ValueError:
+            await interaction.response.send_message(
+                embed=embeds.error_embed(
+                    "Invalid Time Format",
+                    "Please enter time in HH:MM format (24-hour), e.g., 14:30"
+                ),
+                ephemeral=True
+            )
+
+
+class OptionalSettingsModal(discord.ui.Modal):
+    """Modal for optional session settings."""
+    
+    def __init__(self, session_view: SessionCreationView):
+        super().__init__(title="Optional Session Settings")
+        self.session_view = session_view
+        
+        self.description_input = discord.ui.TextInput(
+            label="Description",
+            placeholder="Optional description for your session",
+            max_length=200,
+            required=False,
+            style=discord.TextStyle.paragraph
+        )
+        self.add_item(self.description_input)
+        
+        self.rank_diff_input = discord.ui.TextInput(
+            label="Max Rank Difference",
+            placeholder="Maximum rank difference (0 to disable, leave empty for no limit)",
+            max_length=2,
+            required=False
+        )
+        self.add_item(self.rank_diff_input)
+    
+    async def on_submit(self, interaction: Interaction):
+        # Set description
+        if self.description_input.value.strip():
+            self.session_view.description = self.description_input.value.strip()
+        
+        # Set max rank difference
+        if self.rank_diff_input.value.strip():
+            try:
+                rank_diff = int(self.rank_diff_input.value.strip())
+                if rank_diff < 0:
+                    await interaction.response.send_message(
+                        embed=embeds.error_embed(
+                            "Invalid Rank Difference",
+                            "Maximum rank difference must be 0 or positive."
+                        ),
+                        ephemeral=True
+                    )
+                    return
+                self.session_view.max_rank_diff = rank_diff
+            except ValueError:
+                await interaction.response.send_message(
+                    embed=embeds.error_embed(
+                        "Invalid Rank Difference",
+                        "Please enter a valid number for rank difference."
+                    ),
+                    ephemeral=True
+                )
+                return
+        
+        await interaction.response.defer()
+        await self.session_view.show_final_confirmation(interaction)
+
 
 # Helper function to register persistent views
 async def setup_persistent_views(bot: commands.Bot):
