@@ -6,7 +6,8 @@ from typing import Dict, List, Optional, Any
 from core import models, timeutil
 
 def session_embed(session_data: Dict[str, Any], queue_count: int = 0, 
-                 role_counts: Optional[Dict[str, int]] = None) -> discord.Embed:
+                 role_counts: Optional[Dict[str, int]] = None,
+                 participants: Optional[List[Dict[str, Any]]] = None) -> discord.Embed:
     """
     Create a rich embed for displaying session information.
     
@@ -14,6 +15,7 @@ def session_embed(session_data: Dict[str, Any], queue_count: int = 0,
         session_data: Dictionary containing session information from database
         queue_count: Number of users in queue
         role_counts: Current role distribution (tank, dps, support counts)
+        participants: List of accepted participants with details
     
     Returns:
         Discord embed object
@@ -86,6 +88,35 @@ def session_embed(session_data: Dict[str, Any], queue_count: int = 0,
             value=f"Max difference: {max_rank_diff}",
             inline=True
         )
+    
+    # Add accepted players if any
+    if participants:
+        participant_info = []
+        for participant in participants:
+            username = participant.get('username', 'Unknown User')
+            account_name = participant.get('account_name', 'Unknown Account')
+            role = participant.get('role', 'unknown')
+            is_streaming = participant.get('is_streaming', False)
+            
+            # Format the participant line
+            streaming_indicator = "📺 " if is_streaming else ""
+            role_emoji = models.ROLE_EMOJIS.get(role, "")
+            participant_info.append(f"{streaming_indicator}{role_emoji} **{username}** ({account_name})")
+        
+        if participant_info:
+            embed.add_field(
+                name=f"✅ Accepted Players ({len(participants)})",
+                value="\n".join(participant_info[:10]) if participant_info else "No players accepted",
+                inline=False
+            )
+            
+            # Show overflow message if more than 10 players
+            if len(participants) > 10:
+                embed.add_field(
+                    name="...",
+                    value=f"And {len(participants) - 10} more players",
+                    inline=False
+                )
     
     # Add role requirements
     if game_mode in models.GAME_MODE_REQUIREMENTS:

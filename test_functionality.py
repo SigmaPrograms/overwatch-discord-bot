@@ -145,7 +145,7 @@ def test_embeds():
         'max_rank_diff': 5
     }
     
-    embed = embeds.session_embed(session_data, 3, {"tank": 1, "dps": 1, "support": 1})
+    embed = embeds.session_embed(session_data, 3, {"tank": 1, "dps": 1, "support": 1}, [])
     assert embed.title.startswith("🎮 Overwatch")
     assert "Session #1" in embed.title
     print("  ✓ Session embed generation works")
