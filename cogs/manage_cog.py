@@ -4,7 +4,7 @@ import discord
 from discord import app_commands, Interaction
 from discord.ext import commands
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 from core import database, models, embeds, errors, timeutil, ui
 
@@ -98,7 +98,7 @@ class ManageCog(commands.Cog):
                     scheduled_dt = scheduled_time
                 
                 if scheduled_dt.tzinfo is None:
-                    scheduled_dt = scheduled_dt.replace(tzinfo=timeutil.timezone.utc)
+                    scheduled_dt = scheduled_dt.replace(tzinfo=timezone.utc)
                 
                 time_str = timeutil.format_discord_timestamp(scheduled_dt, 'F')
                 relative_str = timeutil.format_discord_timestamp(scheduled_dt, 'R')

@@ -1,7 +1,7 @@
 """Discord embed generation for the Overwatch bot."""
 
 import discord
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 from core import models, timeutil
 
@@ -48,7 +48,7 @@ def session_embed(session_data: Dict[str, Any], queue_count: int = 0,
                 scheduled_dt = scheduled_time
             
             if scheduled_dt.tzinfo is None:
-                scheduled_dt = scheduled_dt.replace(tzinfo=timeutil.timezone.utc)
+                scheduled_dt = scheduled_dt.replace(tzinfo=timezone.utc)
             
             time_str = timeutil.format_discord_timestamp(scheduled_dt, 'F')
             relative_str = timeutil.format_discord_timestamp(scheduled_dt, 'R')
@@ -238,7 +238,7 @@ def session_list_embed(sessions: List[Dict[str, Any]], guild_name: str = None) -
                     scheduled_dt = scheduled_time
                 
                 if scheduled_dt.tzinfo is None:
-                    scheduled_dt = scheduled_dt.replace(tzinfo=timeutil.timezone.utc)
+                    scheduled_dt = scheduled_dt.replace(tzinfo=timezone.utc)
                 
                 time_str = timeutil.format_discord_timestamp(scheduled_dt, 'R')
                 session_info += f" • {time_str}"

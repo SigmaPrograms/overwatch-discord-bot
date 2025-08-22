@@ -89,8 +89,15 @@ class Database:
 
     async def connect(self):
         """Open or create the SQLite DB with WAL mode for concurrency."""
-        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        # Only create directory if path contains a directory component
+        db_dir = os.path.dirname(self.db_path)
+        if db_dir:
+            os.makedirs(db_dir, exist_ok=True)
+        
         self.conn = await aiosqlite.connect(self.db_path, isolation_level=None)
+        
+        # Set row factory to return Row objects (allows dict-like access)
+        self.conn.row_factory = aiosqlite.Row
         
         # Enable WAL mode for better concurrency
         await self.conn.execute("PRAGMA journal_mode=WAL;")

@@ -1,0 +1,35 @@
+🚀 Starting Overwatch Discord Bot Functionality Tests
+
+🗄️  Testing Database Functionality...
+  ✓ Created user: TestUser
+  ✓ Created account: TestPlayer#1234
+  ✓ Created session: 5v5 session
+  ✓ Database tests passed!
+
+🎮 Testing Models Functionality...
+  ✓ Rank validation works
+  ✓ Rank display formatting works
+  ✓ Role display formatting works
+  ✓ Rank difference calculation works
+  ✓ Game mode requirements correct
+  ✓ Model tests passed!
+
+⏰ Testing Time Utilities...
+  ✓ ISO datetime parsing works
+  ✓ Timezone validation works
+  ✓ UTC conversion works
+  ✓ Discord timestamp formatting works
+  ✓ Time utility tests passed!
+
+📋 Testing Embed Generation...
+  ✓ Session embed generation works
+  ✓ Profile embed generation works
+  ✓ Error embed generation works
+  ✓ Embed tests passed!
+
+🎉 All tests passed! The bot is ready to deploy!
+
+📝 Next steps:
+   1. Set your BOT_TOKEN in .env file
+   2. Invite the bot to your Discord server
+   3. Run: python bot.py
