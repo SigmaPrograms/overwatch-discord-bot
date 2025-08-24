@@ -411,8 +411,8 @@ class QueueManagementView(discord.ui.View):
                             ranks.append(f"  {emoji} {rank_display} {division}")
                     
                     # Add 6v6 rank
-                    sixv6_rank = account.get('sixv6_rank')
-                    sixv6_division = account.get('sixv6_division')
+                    sixv6_rank = account['sixv6_rank'] if 'sixv6_rank' in account.keys() else None
+                    sixv6_division = account['sixv6_division'] if 'sixv6_division' in account.keys() else None
                     if sixv6_rank and sixv6_division:
                         rank_display = models.get_rank_display(sixv6_rank)
                         ranks.append(f"  🎯 {rank_display} {sixv6_division}")
@@ -639,8 +639,8 @@ class PlayerAcceptanceView(discord.ui.View):
                         ranks.append(f"  {emoji} {rank_display} {division}")
                 
                 # Add 6v6 rank
-                sixv6_rank = account.get('sixv6_rank')
-                sixv6_division = account.get('sixv6_division')
+                sixv6_rank = account['sixv6_rank'] if 'sixv6_rank' in account.keys() else None
+                sixv6_division = account['sixv6_division'] if 'sixv6_division' in account.keys() else None
                 if sixv6_rank and sixv6_division:
                     rank_display = models.get_rank_display(sixv6_rank)
                     ranks.append(f"  🎯 {rank_display} {sixv6_division}")
@@ -940,7 +940,7 @@ class PlayerAcceptanceView(discord.ui.View):
                     ranks.append(f"{role}: {rank.title()}")
             
             # Add 6v6 rank
-            sixv6_rank = account.get('sixv6_rank')
+            sixv6_rank = account['sixv6_rank'] if 'sixv6_rank' in account.keys() else None
             if sixv6_rank:
                 ranks.append(f"6v6: {sixv6_rank.title()}")
             
